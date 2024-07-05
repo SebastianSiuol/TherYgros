@@ -6,12 +6,13 @@
 
 /* Downloaded Packages */
 #include <FirebaseClient.h>
-#include <DHT.h>
+// #include <DHT.h>
 #include <ArduinoJson.h>
 
 
 /* User-defined*/
 #include <firebaseDatabaseDefinition.h>
+#include <therYgrosInitializations.h>
 
 //                       Initialization Block
 /* ====================================================================== */
@@ -38,15 +39,6 @@ WiFiServer server(80);
 StaticJsonDocument<50> receivedMessage;
 /* ===================================================== */
 
-/* TCP KeepAlive */
-/* ===================================================== */
-bool tcp_keep_alive_set = false;
-int keepAlive = 1000; // Milliseconds
-int keepIdle = 5;     // Seconds
-int keepInterval = 5; // Seconds
-int keepCount = 1;
-/* ===================================================== */
-
 /* FirebaseClient Initializaton*/
 /* ===================================================== */
 UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD);
@@ -58,25 +50,6 @@ WiFiClient wifi_client;
 ESP_SSLClient ssl_client;
 using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client, getNetwork(network));
-/* ===================================================== */
-
-/* DHT variables and pins initialization */
-/* ===================================================== */
-#define DHTPIN 4
-DHT dht(DHTPIN, DHT22);
-float temperature;
-float humidity;
-String databasePath;
-/* ===================================================== */
-
-/* NTP Time Initializaton*/
-/* ===================================================== */
-const char *ntp1Server = "time.nist.gov";
-// const char *ntp2Server = "pool.ntp.org";
-// const char *ntp3Server = "1.asia.pool.ntp.org";
-const long gmtOffset_sec = 25200;
-const int daylightOffset_sec = 3600;
-bool timeRetrieved = false;
 /* ===================================================== */
 
 /* Timer that sends the data to the database (5000 is 5 seconds) */
@@ -94,16 +67,37 @@ void asyncCB(AsyncResult &aResult);
 void printResult(AsyncResult &aResult);
 /* ===================================================== */
 
+/* Preferences (Flash Writing) */
+/* ===================================================== */
+Preferences preferences;
+/* ===================================================== */
 
 void initDHT()
 {
     dht.begin();
 }
 
+void initFirebase(){
+    ssl_client.setClient(&wifi_client);
+    ssl_client.setInsecure();
+    ssl_client.setDebugLevel(1);
+    ssl_client.setSessionTimeout(150);
+
+    initializeApp(aClient, app, getAuth(user_auth), asyncCB, "authTask");
+    app.getApp<RealtimeDatabase>(Database);
+    Database.url(DATABASE_URL);
+}
+
+
 void setup()
 {
     WiFi.disconnect();
     delay(10000);
+
+    
+    pinMode(resetPin, INPUT);
+    pinMode(statusPin, OUTPUT);
+
 
     initDHT();
 
@@ -119,14 +113,7 @@ void setup()
 
     configTime(gmtOffset_sec, daylightOffset_sec, ntp1Server);
 
-    ssl_client.setClient(&wifi_client);
-    ssl_client.setInsecure();
-    ssl_client.setDebugLevel(1);
-    ssl_client.setSessionTimeout(150);
-
-    initializeApp(aClient, app, getAuth(user_auth), asyncCB, "authTask");
-    app.getApp<RealtimeDatabase>(Database);
-    Database.url(DATABASE_URL);
+    initFirebase();
 }
 
 void loop()
