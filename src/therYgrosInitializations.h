@@ -35,6 +35,7 @@ const char *ntp1Server = "time.nist.gov";
 const long gmtOffset_sec = 25200;
 const int daylightOffset_sec = 3600;
 bool timeRetrieved = false;
+const unsigned long time_retrieval_timeout = 10000; // 10 seconds
 /* ========================================================================= */
 /* TCP KeepAlive */
 

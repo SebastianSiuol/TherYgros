@@ -145,11 +145,18 @@ void loop()
         databasePath = ((String) "UsersData/" + userID + "/");
 
         // TODO: Add a minute to reduce timeout session
-        int retrievedHour = getTimeFirst();
+        int retrievedHour, retrievedMinute;
+        unsigned long time_retrieval_start = millis();
 
         while (!timeRetrieved)
         {
-            retrievedHour = getTimeFirst();
+            if (millis() - time_retrieval_start >= time_retrieval_timeout)
+            {
+                Serial.println("Timeout reached. Restarting device.");
+                ESP.restart();
+            }
+
+            getTimeFirst(retrievedHour, retrievedMinute);
             delay(1000);
         }
 
@@ -164,7 +171,8 @@ void loop()
             // Send readings to database:
             Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempTask");
             Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidTask");
-            Database.set<int>(aClient, databasePath + "time", retrievedHour, asyncCB, "timeTask");
+            Database.set<int>(aClient, databasePath + "time/hour", retrievedHour, asyncCB, "timeTask");
+            Database.set<int>(aClient, databasePath + "time/minute", retrievedMinute, asyncCB, "timeTask");
         }
     }
 
@@ -185,18 +193,19 @@ void provisionedStatusLED(int time_interval)
 
 /* Contacts the NTP first to get the time */
 /* ===================================================== */
-int getTimeFirst()
-{
+void getTimeFirst(int &hour, int &minute) {
     struct tm timeinfo;
 
-    if (!getLocalTime(&timeinfo))
-    {
+    if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
-        return 0;
+        hour = 0;
+        minute = 0;
+        return;
     }
 
     timeRetrieved = true;
-    return ((int)timeinfo.tm_hour);
+    hour = timeinfo.tm_hour;
+    minute = timeinfo.tm_min;
 }
 /* ===================================================== */
 
@@ -226,7 +235,6 @@ void tcpKeepAlive()
 /* ===================================================== */
 void provisionStart(WiFiClient client)
 {
-
     const char *wifiSSID;
     const char *wifiPassword;
 
