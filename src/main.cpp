@@ -6,9 +6,7 @@
 
 /* Downloaded Packages */
 #include <FirebaseClient.h>
-// #include <DHT.h>
 #include <ArduinoJson.h>
-
 
 /* User-defined*/
 #include <firebaseDatabaseDefinition.h>
@@ -27,16 +25,6 @@ const char *password = "470025906";
 /* ===================================================== */
 IPAddress ipAddress(192, 168, 1, 1);
 IPAddress subMask(255, 255, 255, 0);
-/* ===================================================== */
-
-/* TCP Initialization */
-/* ===================================================== */
-WiFiServer server(80);
-/* ===================================================== */
-
-/* Initializes JSON Doc */
-/* ===================================================== */
-StaticJsonDocument<50> receivedMessage;
 /* ===================================================== */
 
 /* FirebaseClient Initializaton*/
@@ -62,6 +50,9 @@ unsigned long timerDelay = 5000;
 /* ===================================================== */
 void tcpKeepAlive();
 int getTimeFirst();
+void provisionedStatusLED(int time_interval);
+void provisionStart(WiFiClient client);
+void resetDevice();
 
 void asyncCB(AsyncResult &aResult);
 void printResult(AsyncResult &aResult);
@@ -77,7 +68,8 @@ void initDHT()
     dht.begin();
 }
 
-void initFirebase(){
+void initFirebase()
+{
     ssl_client.setClient(&wifi_client);
     ssl_client.setInsecure();
     ssl_client.setDebugLevel(1);
@@ -88,67 +80,111 @@ void initFirebase(){
     Database.url(DATABASE_URL);
 }
 
-
 void setup()
 {
+    Serial.begin(115200);
     WiFi.disconnect();
     delay(10000);
 
-    
     pinMode(resetPin, INPUT);
     pinMode(statusPin, OUTPUT);
 
-
     initDHT();
 
-    Serial.begin(115200);
+    // Initially retrieves for stored credentials in flash.
+    preferences.begin("credentials", true);
+    String storedSSID = preferences.getString("storedSSID", "");
+    String storedPassword = preferences.getString("storedPassword", "");
+    preferences.end();
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    Serial.print("Connecting to Wi-Fi");
-    while (WiFi.status() != WL_CONNECTED)
+    // Checks if there are values in stored credentials, if not start SoftAP and start provisioning.
+    if (storedSSID == "" && storedPassword == "")
     {
-        Serial.print(".");
-        delay(300);
+        provisioned_status = 0;
+        WiFi.mode(WIFI_MODE_APSTA);
+        WiFi.softAP(ssid, password);
+
+        if (!WiFi.softAPConfig(ipAddress, ipAddress, subMask))
+        {
+            while (1)
+                ;
+        }
+
+        server.begin();
     }
+    else
+    {
+        provisioned_status = 1;
+        WiFi.mode(WIFI_MODE_STA);
+        WiFi.begin(storedSSID, storedPassword);
+        digitalWrite(statusPin, HIGH);
 
-    configTime(gmtOffset_sec, daylightOffset_sec, ntp1Server);
-
-    initFirebase();
+        Serial.println("DEBUG_LOG: Stored credentials found! Connecting to WiFi...");
+        initFirebase();
+        configTime(gmtOffset_sec, daylightOffset_sec, ntp1Server);
+    }
 }
 
 void loop()
 {
-    tcpKeepAlive();
-
-    app.loop();
-    Database.loop();
-
-    String userID = app.getUid();
-    databasePath = ((String)"UsersData/" + userID + "/" );
-
-    //TODO: Add a minute to reduce timeout session
-    int retrievedHour = getTimeFirst();
-
-    while (!timeRetrieved)
+    if (provisioned_status != 1)
     {
-        retrievedHour = getTimeFirst();
-        delay(1000);
+        WiFiClient client = server.available();
+        provisionedStatusLED(1000);
+        provisionStart(client);
+    }
+    else
+    {
     }
 
-    if (app.ready() && (millis() - sendDataPrevMillis > timerDelay || sendDataPrevMillis == 0))
+    if (provisioned_status == 1 && !buttonPressed)
     {
-        sendDataPrevMillis = millis();
+        tcpKeepAlive();
 
-        // Get latest sensor readings
-        temperature = dht.readTemperature();
-        humidity = dht.readHumidity();
+        app.loop();
+        Database.loop();
 
-        // Send readings to database:
-        Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempTask");
-        Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidTask");
-        Database.set<int>(aClient, databasePath + "time", retrievedHour, asyncCB, "timeTask");
+        String userID = app.getUid();
+        databasePath = ((String) "UsersData/" + userID + "/");
+
+        // TODO: Add a minute to reduce timeout session
+        int retrievedHour = getTimeFirst();
+
+        while (!timeRetrieved)
+        {
+            retrievedHour = getTimeFirst();
+            delay(1000);
+        }
+
+        if (app.ready() && (millis() - sendDataPrevMillis > timerDelay || sendDataPrevMillis == 0))
+        {
+            sendDataPrevMillis = millis();
+
+            // Get latest sensor readings
+            temperature = dht.readTemperature();
+            humidity = dht.readHumidity();
+
+            // Send readings to database:
+            Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempTask");
+            Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidTask");
+            Database.set<int>(aClient, databasePath + "time", retrievedHour, asyncCB, "timeTask");
+        }
     }
+
+    resetDevice();
 }
+
+/* Function for led status indicator. */
+/* ===================================================== */
+
+void provisionedStatusLED(int time_interval)
+{
+    digitalWrite(statusPin, HIGH);
+    delay(time_interval);
+    digitalWrite(statusPin, LOW);
+    delay(time_interval);
+}
+/* ===================================================== */
 
 /* Contacts the NTP first to get the time */
 /* ===================================================== */
@@ -166,7 +202,6 @@ int getTimeFirst()
     return ((int)timeinfo.tm_hour);
 }
 /* ===================================================== */
-
 
 /* Function for Keeping the TCP alive (I do not know if it works or consistent though..) */
 /* ===================================================== */
@@ -189,7 +224,6 @@ void tcpKeepAlive()
     }
 }
 /* ===================================================== */
-
 
 /* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove)*/
 /* ===================================================== */
@@ -236,5 +270,116 @@ void printResult(AsyncResult &aResult)
 
         Firebase.printf("Free Heap: %d\n", ESP.getFreeHeap());
     }
+}
+/* ===================================================== */
+
+/* Function that handles and receives provisioning details from the application. */
+/* ===================================================== */
+void provisionStart(WiFiClient client)
+{
+
+    const char *wifiSSID;
+    const char *wifiPassword;
+
+    if (client)
+    {
+        Serial.println("Client connected");
+
+        while (client.connected())
+        {
+            if (client.available())
+            {
+                String message = client.readStringUntil('\n');
+                Serial.println("Message received: " + message);
+
+                if (message.c_str())
+                {
+                    DeserializationError error = deserializeJson(receivedMessage, message);
+
+                    const char *receivedSSID = receivedMessage["SSID"];
+                    const char *receivedPassword = receivedMessage["Password"];
+
+                    WiFi.begin(receivedSSID, receivedPassword);
+
+                    int timeout = 0;
+
+                    Serial.print("Connecting to WiFi ..");
+                    while (WiFi.status() != WL_CONNECTED)
+                    {
+                        provisionedStatusLED(300);
+                        timeout++;
+                        if (timeout == 10)
+                        {
+                            break;
+                        }
+                    }
+                    Serial.println(WiFi.localIP());
+                    wifiSSID = receivedSSID;
+                    wifiPassword = receivedPassword;
+                }
+
+                // Checks if WiFi connection is successful
+                if (WiFi.status() == WL_CONNECTED)
+                {
+                    client.println("Connected!");
+                    Serial.println("Acknowledgment sent");
+
+                    preferences.begin("credentials", false);
+
+                    preferences.putString("storedSSID", wifiSSID);
+                    preferences.putString("storedPassword", wifiPassword);
+
+                    preferences.end();
+
+                    delay(5000);
+                    WiFi.mode(WIFI_STA);
+                    digitalWrite(statusPin, HIGH);
+                    provisioned_status = 1;
+                }
+                else if (WiFi.status() != WL_CONNECTED)
+                {
+                    client.println("Connection failed! try again!");
+                }
+            }
+            client.stop();
+            Serial.println("Client disconnected");
+        }
+    }
+}
+/* ===================================================== */
+
+/* Function that resets device when pressed for 5 seconds. */
+/* ===================================================== */
+void resetDevice()
+{
+    buttonState = digitalRead(resetPin);
+
+    if (buttonState == HIGH)
+    {
+        if (!buttonPressed)
+        {
+            buttonPressTime = millis();
+            buttonPressed = true;
+        }
+
+        provisionedStatusLED(200);
+
+        if (millis() - buttonPressTime >= 5000)
+        {
+            Serial.println("Button pressed for 5 seconds. Resetting...");
+
+            preferences.begin("credentials", false);
+            preferences.clear();
+            preferences.end();
+
+            ESP.restart();
+        }
+    }
+    else
+    {
+        buttonPressed = false;
+    }
+
+    delay(10); // Small delay to debounce the button
 }
 /* ===================================================== */

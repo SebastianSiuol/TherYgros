@@ -1,5 +1,12 @@
 #include <DHT.h>
 #include <time.h>
+#include <Arduino.h>
+#include <WiFi.h>
+#include <time.h>
+#include <lwip/sockets.h>
+#include <Preferences.h>
+#include <ArduinoJson.h>
+
 
 
 /* ===================================================== */
@@ -36,4 +43,14 @@ int keepAlive = 1000; // Milliseconds
 int keepIdle = 5;     // Seconds
 int keepInterval = 5; // Seconds
 int keepCount = 1;
+/* ===================================================== */
+
+/* TCP Initialization */
+/* ===================================================== */
+WiFiServer server(80);
+/* ===================================================== */
+
+/* Initializes JSON Doc */
+/* ===================================================== */
+StaticJsonDocument<50> receivedMessage;
 /* ===================================================== */
