@@ -144,10 +144,7 @@ void loop()
         String userID = app.getUid();
         databasePath = ((String) "UsersData/" + userID + "/");
 
-        // TODO: Add a minute to reduce timeout session
-        int retrievedHour, retrievedMinute;
         unsigned long time_retrieval_start = millis();
-
         while (!timeRetrieved)
         {
             if (millis() - time_retrieval_start >= time_retrieval_timeout)
@@ -156,7 +153,9 @@ void loop()
                 ESP.restart();
             }
 
-            getTimeFirst(retrievedHour, retrievedMinute);
+            retrievedHour = getTimeFirst("hour");
+            retrievedMinute = getTimeFirst("minute");
+
             delay(1000);
         }
 
@@ -171,8 +170,8 @@ void loop()
             // Send readings to database:
             Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempTask");
             Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidTask");
-            Database.set<int>(aClient, databasePath + "time/hour", retrievedHour, asyncCB, "timeTask");
-            Database.set<int>(aClient, databasePath + "time/minute", retrievedMinute, asyncCB, "timeTask");
+            Database.set<int>(aClient, databasePath + "time/hour", retrievedHour, asyncCB, "timeHourTask");
+            Database.set<int>(aClient, databasePath + "time/minute", retrievedMinute, asyncCB, "timeMinuteTask");
         }
     }
 
@@ -193,19 +192,20 @@ void provisionedStatusLED(int time_interval)
 
 /* Contacts the NTP first to get the time */
 /* ===================================================== */
-void getTimeFirst(int &hour, int &minute) {
+int getTimeFirst(String time) {
     struct tm timeinfo;
 
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
-        hour = 0;
-        minute = 0;
-        return;
+        return 0;
     }
 
     timeRetrieved = true;
-    hour = timeinfo.tm_hour;
-    minute = timeinfo.tm_min;
+    if (time == "hour"){
+        return ((int) timeinfo.tm_hour);
+    } else if (time == "minute"){
+        return ((int) timeinfo.tm_min);
+    }
 }
 /* ===================================================== */
 
