@@ -133,9 +133,6 @@ void loop()
         provisionedStatusLED(1000);
         provisionStart(client);
     }
-    else
-    {
-    }
 
     if (provisioned_status == 1 && !buttonPressed)
     {
@@ -221,54 +218,6 @@ void tcpKeepAlive()
     else
     {
         tcp_keep_alive_set = false;
-    }
-}
-/* ===================================================== */
-
-/* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove)*/
-/* ===================================================== */
-void asyncCB(AsyncResult &aResult)
-{
-    printResult(aResult);
-}
-
-void printResult(AsyncResult &aResult)
-{
-    if (aResult.isEvent())
-    {
-        Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.appEvent().message().c_str(), aResult.appEvent().code());
-    }
-
-    if (aResult.isDebug())
-    {
-        Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
-    }
-
-    if (aResult.isError())
-    {
-        Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
-        WiFi.reconnect();
-    }
-
-    if (aResult.available())
-    {
-        RealtimeDatabaseResult &RTDB = aResult.to<RealtimeDatabaseResult>();
-        if (RTDB.isStream())
-        {
-            Serial.println("----------------------------");
-            Firebase.printf("task: %s\n", aResult.uid().c_str());
-            Firebase.printf("event: %s\n", RTDB.event().c_str());
-            Firebase.printf("path: %s\n", RTDB.dataPath().c_str());
-            Firebase.printf("data: %s\n", RTDB.to<const char *>());
-            Firebase.printf("type: %d\n", RTDB.type());
-        }
-        else
-        {
-            Serial.println("----------------------------");
-            Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
-        }
-
-        Firebase.printf("Free Heap: %d\n", ESP.getFreeHeap());
     }
 }
 /* ===================================================== */
@@ -381,5 +330,53 @@ void resetDevice()
     }
 
     delay(10); // Small delay to debounce the button
+}
+/* ===================================================== */
+
+/* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove)*/
+/* ===================================================== */
+void asyncCB(AsyncResult &aResult)
+{
+    printResult(aResult);
+}
+
+void printResult(AsyncResult &aResult)
+{
+    if (aResult.isEvent())
+    {
+        Firebase.printf("Event task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.appEvent().message().c_str(), aResult.appEvent().code());
+    }
+
+    if (aResult.isDebug())
+    {
+        Firebase.printf("Debug task: %s, msg: %s\n", aResult.uid().c_str(), aResult.debug().c_str());
+    }
+
+    if (aResult.isError())
+    {
+        Firebase.printf("Error task: %s, msg: %s, code: %d\n", aResult.uid().c_str(), aResult.error().message().c_str(), aResult.error().code());
+        WiFi.reconnect();
+    }
+
+    if (aResult.available())
+    {
+        RealtimeDatabaseResult &RTDB = aResult.to<RealtimeDatabaseResult>();
+        if (RTDB.isStream())
+        {
+            Serial.println("----------------------------");
+            Firebase.printf("task: %s\n", aResult.uid().c_str());
+            Firebase.printf("event: %s\n", RTDB.event().c_str());
+            Firebase.printf("path: %s\n", RTDB.dataPath().c_str());
+            Firebase.printf("data: %s\n", RTDB.to<const char *>());
+            Firebase.printf("type: %d\n", RTDB.type());
+        }
+        else
+        {
+            Serial.println("----------------------------");
+            Firebase.printf("task: %s, payload: %s\n", aResult.uid().c_str(), aResult.c_str());
+        }
+
+        Firebase.printf("Free Heap: %d\n", ESP.getFreeHeap());
+    }
 }
 /* ===================================================== */
