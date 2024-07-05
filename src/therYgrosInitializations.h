@@ -26,6 +26,8 @@ int buttonState = 0;
 unsigned long buttonPressTime = 0;
 bool buttonPressed = false;
 bool provisioned_status = 0;
+
+volatile bool buttonInterruptFlag = false;
 /* ========================================================================= */
 /* NTP Time Initializaton*/
 

@@ -80,6 +80,10 @@ void initFirebase()
     Database.url(DATABASE_URL);
 }
 
+void IRAM_ATTR handleButtonPress() {
+    buttonInterruptFlag = true;
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -127,6 +131,11 @@ void setup()
 
 void loop()
 {
+    if (buttonInterruptFlag) {
+        buttonInterruptFlag = false;
+        resetDevice();
+    }
+
     if (provisioned_status != 1)
     {
         WiFiClient client = server.available();
@@ -144,7 +153,10 @@ void loop()
         String userID = app.getUid();
         databasePath = ((String) "UsersData/" + userID + "/");
 
+        retrievedHour = getTimeFirst("hour");
+        retrievedMinute = getTimeFirst("minute");
         unsigned long time_retrieval_start = millis();
+
         while (!timeRetrieved)
         {
             if (millis() - time_retrieval_start >= time_retrieval_timeout)
@@ -319,6 +331,7 @@ void resetDevice()
             buttonPressed = true;
         }
 
+        //200 is 200ms of blinking lights
         provisionedStatusLED(200);
 
         if (millis() - buttonPressTime >= 5000)
