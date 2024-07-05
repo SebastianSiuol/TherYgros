@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "*.php": "php",
+        "*.tcc": "cpp",
+        "fstream": "cpp",
+        "sstream": "cpp"
+    }
+}
