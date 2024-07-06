@@ -4,11 +4,11 @@
 #include <lwip/sockets.h>
 #include <Preferences.h>
 
-/* Downloaded Packages */
+/* Downloaded Packages Imports*/
 #include <FirebaseClient.h>
 #include <ArduinoJson.h>
 
-/* User-defined*/
+/* User-defined Imports*/
 #include <firebaseDatabaseDefinition.h>
 #include <therYgrosInitializations.h>
 
@@ -17,8 +17,8 @@
 
 /* Hardcoded Soft Access Point Credentials */
 /* ===================================================== */
-const char *ssid = "TherYgros_53136";
-const char *password = "470025906";
+#define AP_SSID "TherYgros_53136"
+#define AP_PASS "470025906"
 /* ===================================================== */
 
 /* Soft Access Point Configurations */
@@ -39,7 +39,7 @@ using AsyncClient = AsyncClientClass;
 AsyncClient aClient(ssl_client, getNetwork(network));
 /* ===================================================== */
 
-/* Timer that sends the data to the database (5000 is 5 seconds) */
+/* Timer Initialization for Database Sending (5000 is 5 seconds) */
 /* ===================================================== */
 unsigned long sendDataPrevMillis = 0;
 unsigned long timerDelay = 5000;
@@ -56,15 +56,8 @@ void resetDevice();
 void asyncCB(AsyncResult &aResult);
 void printResult(AsyncResult &aResult);
 /* ===================================================== */
-
-/* Preferences (Flash Writing) */
-/* ===================================================== */
-Preferences preferences;
-/* ===================================================== */
-
-void IRAM_ATTR handleButtonPress() {
-    buttonInterruptFlag = true;
-}
+/* ====================================================================== */
+//                       Initialization Block
 
 void setup()
 {
@@ -74,43 +67,46 @@ void setup()
 
     pinMode(resetPin, INPUT);
     pinMode(statusPin, OUTPUT);
-    attachInterrupt(digitalPinToInterrupt(resetPin), handleButtonPress, CHANGE);
 
     initDHT();
 
     // Initially retrieves for stored credentials in flash.
     preferences.begin("credentials", true);
+
     String storedSSID = preferences.getString("storedSSID", "");
     String storedPassword = preferences.getString("storedPassword", "");
 
     String storedFirebaseUser = preferences.getString("storedFBUser", "");
     String storedFirebasePassword = preferences.getString("storedFBPass", "");
+
     preferences.end();
 
     // Checks if there are values in stored credentials, if not start SoftAP and start provisioning.
     if (storedSSID == "" && storedPassword == "" && storedFirebaseUser == "" && storedFirebasePassword == "")
     {
-        provisioned_status = 0;
+        is_provisioned = false;
+
         WiFi.mode(WIFI_MODE_APSTA);
-        WiFi.softAP(ssid, password);
+        WiFi.softAP(AP_SSID, AP_PASS);
 
         if (!WiFi.softAPConfig(ipAddress, ipAddress, subMask))
         {
-            while (1)
-                ;
+            while (1);
         }
 
         server.begin();
     }
     else
     {
+        is_provisioned = true;
+
         initFirebase(API_KEY, storedFirebaseUser, storedFirebasePassword);
-        provisioned_status = 1;
+
         WiFi.mode(WIFI_MODE_STA);
         WiFi.begin(storedSSID, storedPassword);
+        
         digitalWrite(statusPin, HIGH);
 
-        Serial.println("DEBUG_LOG: Stored credentials found! Connecting to WiFi...");
         configTime(gmtOffset_sec, daylightOffset_sec, ntp1Server);
     }
 }
@@ -119,14 +115,15 @@ void loop()
 {
     resetDevice();
 
-    if (provisioned_status != 1)
+    if (is_provisioned == false)
     {
         WiFiClient client = server.available();
+
         provisionedStatusLED(1000);
         provisionStart(client);
     }
 
-    if (provisioned_status == 1 && !buttonPressed)
+    if (is_provisioned == true)
     {
         digitalWrite(statusPin, HIGH);
 
@@ -151,8 +148,7 @@ void loop()
 
             retrievedTime = getTimeFirst();
 
-
-            delay(1000);
+            delay(500);
         }
 
         if (app.ready() && (millis() - sendDataPrevMillis > timerDelay || sendDataPrevMillis == 0))
@@ -170,12 +166,26 @@ void loop()
         }
     }
 }
-
+/* ===================================================== */
+//
+//
+//
+//
+//
+/* Initializes the DHT */
+/* ===================================================== */
 void initDHT()
 {
     dht.begin();
 }
-
+/* ===================================================== */
+//
+//
+//
+//
+//
+/* Initializes the Firebase */
+/* ===================================================== */
 void initFirebase(String apiKey, String userEmail, String userPassword)
 {
      UserAuth user_auth(apiKey, userEmail, userPassword);
@@ -189,7 +199,12 @@ void initFirebase(String apiKey, String userEmail, String userPassword)
     app.getApp<RealtimeDatabase>(Database);
     Database.url(DATABASE_URL);
 }
-
+/* ===================================================== */
+//
+//
+//
+//
+//
 /* Function for led status indicator. */
 /* ===================================================== */
 
@@ -199,13 +214,21 @@ void provisionedStatusLED(int time_interval)
     delay(time_interval);
     digitalWrite(statusPin, LOW);
     delay(time_interval);
+    digitalWrite(statusPin, HIGH);
+
 }
 /* ===================================================== */
-
+//
+//
+//
+//
+//
 /* Contacts the NTP first to get the time */
 /* ===================================================== */
 String getTimeFirst() {
     struct tm timeinfo;
+
+    provisionedStatusLED(100);
 
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
@@ -213,12 +236,6 @@ String getTimeFirst() {
     }
 
     timeRetrieved = true;
-    char timeYear[5];
-    char timeMonth[3];
-    char timeDay[3];
-    char timeHour[3];
-    char timeMinute[3];
-    char timeSecond[3];
 
     strftime(timeYear, 5, "%Y", &timeinfo);
     strftime(timeMonth, 3, "%m", &timeinfo);
@@ -230,7 +247,11 @@ String getTimeFirst() {
     return ((String)timeYear + "-" + timeMonth + "-" + timeDay + " " + timeHour+ ":" + timeMinute + ":" + timeSecond);
 }
 /* ===================================================== */
-
+//
+//
+//
+//
+//
 /* Function for Keeping the TCP alive (I do not know if it works or consistent though..) */
 /* ===================================================== */
 void tcpKeepAlive()
@@ -252,7 +273,11 @@ void tcpKeepAlive()
     }
 }
 /* ===================================================== */
-
+//
+//
+//
+//
+//
 /* Function that handles and receives provisioning details from the application. */
 /* ===================================================== */
 void provisionStart(WiFiClient client)
@@ -287,21 +312,27 @@ void provisionStart(WiFiClient client)
                     int timeout = 0;
 
                     Serial.print("Connecting to WiFi ..");
+
                     while (WiFi.status() != WL_CONNECTED)
                     {
-                        provisionedStatusLED(300);
+                        provisionedStatusLED(400);
+
                         timeout++;
+                        delay(1000);
+                        Serial.print(".");
                         if (timeout == 5)
                         {
                             break;
                         }
-                        delay(1000);
                     }
+
                     Serial.println(WiFi.localIP());
+
                     wifiSSID = receivedSSID;
                     wifiPassword = receivedPassword;
                     firebaseUser = receivedFirebaseUser;
                     firebasePassword = receivedFirebasePassword;
+
                 }
 
                 // Checks if WiFi connection is successful
@@ -321,9 +352,7 @@ void provisionStart(WiFiClient client)
                     preferences.end();
 
                     delay(5000);
-                    WiFi.mode(WIFI_STA);
-                    digitalWrite(statusPin, HIGH);
-                    provisioned_status = 1;
+                    is_provisioned = true;
                 }
                 else if (WiFi.status() != WL_CONNECTED)
                 {
@@ -333,12 +362,20 @@ void provisionStart(WiFiClient client)
             }
             client.stop();
             Serial.println("Client disconnected");
-            ESP.restart();
+
+            // Restarts the device if the provision is a success
+            if(is_provisioned){
+                ESP.restart();
+            }
         }
     }
 }
 /* ===================================================== */
-
+//
+//
+//
+//
+//
 /* Function that resets device when pressed for 5 seconds. */
 /* ===================================================== */
 void resetDevice()
@@ -353,12 +390,10 @@ void resetDevice()
             buttonPressed = true;
         }
 
-        //200 is 200ms of blinking lights
         provisionedStatusLED(200);
 
         if (millis() - buttonPressTime >= 5000)
         {
-            // Serial.println("Button pressed for 5 seconds. Resetting...");
 
             preferences.begin("credentials", false);
             preferences.clear();
@@ -376,6 +411,11 @@ void resetDevice()
 }
 
 /* ========================================================================= */
+//
+//
+//
+//
+//
 /* Firebase Client Functions */
 /* ========================================================================= */
 /* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove or change)*/
