@@ -29,7 +29,6 @@ IPAddress subMask(255, 255, 255, 0);
 
 /* FirebaseClient Initializaton*/
 /* ===================================================== */
-UserAuth user_auth(API_KEY, USER_EMAIL, USER_PASSWORD);
 FirebaseApp app;
 RealtimeDatabase Database;
 
@@ -49,7 +48,7 @@ unsigned long timerDelay = 5000;
 /* Function Initializations */
 /* ===================================================== */
 void tcpKeepAlive();
-int getTimeFirst();
+String getTimeFirst();
 void provisionedStatusLED(int time_interval);
 void provisionStart(WiFiClient client);
 void resetDevice();
@@ -63,23 +62,6 @@ void printResult(AsyncResult &aResult);
 Preferences preferences;
 /* ===================================================== */
 
-void initDHT()
-{
-    dht.begin();
-}
-
-void initFirebase()
-{
-    ssl_client.setClient(&wifi_client);
-    ssl_client.setInsecure();
-    ssl_client.setDebugLevel(1);
-    ssl_client.setSessionTimeout(150);
-
-    initializeApp(aClient, app, getAuth(user_auth), asyncCB, "authTask");
-    app.getApp<RealtimeDatabase>(Database);
-    Database.url(DATABASE_URL);
-}
-
 void IRAM_ATTR handleButtonPress() {
     buttonInterruptFlag = true;
 }
@@ -88,10 +70,11 @@ void setup()
 {
     Serial.begin(115200);
     WiFi.disconnect();
-    delay(10000);
+    delay(500);
 
     pinMode(resetPin, INPUT);
     pinMode(statusPin, OUTPUT);
+    attachInterrupt(digitalPinToInterrupt(resetPin), handleButtonPress, CHANGE);
 
     initDHT();
 
@@ -99,10 +82,13 @@ void setup()
     preferences.begin("credentials", true);
     String storedSSID = preferences.getString("storedSSID", "");
     String storedPassword = preferences.getString("storedPassword", "");
+
+    String storedFirebaseUser = preferences.getString("storedFBUser", "");
+    String storedFirebasePassword = preferences.getString("storedFBPass", "");
     preferences.end();
 
     // Checks if there are values in stored credentials, if not start SoftAP and start provisioning.
-    if (storedSSID == "" && storedPassword == "")
+    if (storedSSID == "" && storedPassword == "" && storedFirebaseUser == "" && storedFirebasePassword == "")
     {
         provisioned_status = 0;
         WiFi.mode(WIFI_MODE_APSTA);
@@ -118,23 +104,20 @@ void setup()
     }
     else
     {
+        initFirebase(API_KEY, storedFirebaseUser, storedFirebasePassword);
         provisioned_status = 1;
         WiFi.mode(WIFI_MODE_STA);
         WiFi.begin(storedSSID, storedPassword);
         digitalWrite(statusPin, HIGH);
 
         Serial.println("DEBUG_LOG: Stored credentials found! Connecting to WiFi...");
-        initFirebase();
         configTime(gmtOffset_sec, daylightOffset_sec, ntp1Server);
     }
 }
 
 void loop()
 {
-    if (buttonInterruptFlag) {
-        buttonInterruptFlag = false;
-        resetDevice();
-    }
+    resetDevice();
 
     if (provisioned_status != 1)
     {
@@ -145,6 +128,8 @@ void loop()
 
     if (provisioned_status == 1 && !buttonPressed)
     {
+        digitalWrite(statusPin, HIGH);
+
         tcpKeepAlive();
 
         app.loop();
@@ -153,8 +138,7 @@ void loop()
         String userID = app.getUid();
         databasePath = ((String) "UsersData/" + userID + "/");
 
-        retrievedHour = getTimeFirst("hour");
-        retrievedMinute = getTimeFirst("minute");
+        String retrievedTime = getTimeFirst();
         unsigned long time_retrieval_start = millis();
 
         while (!timeRetrieved)
@@ -165,8 +149,8 @@ void loop()
                 ESP.restart();
             }
 
-            retrievedHour = getTimeFirst("hour");
-            retrievedMinute = getTimeFirst("minute");
+            retrievedTime = getTimeFirst();
+
 
             delay(1000);
         }
@@ -180,14 +164,30 @@ void loop()
             humidity = dht.readHumidity();
 
             // Send readings to database:
-            Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempTask");
-            Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidTask");
-            Database.set<int>(aClient, databasePath + "time/hour", retrievedHour, asyncCB, "timeHourTask");
-            Database.set<int>(aClient, databasePath + "time/minute", retrievedMinute, asyncCB, "timeMinuteTask");
+            Database.set<float>(aClient, databasePath + "temperature", temperature, asyncCB, "tempSetTask");
+            Database.set<float>(aClient, databasePath + "humidity", humidity, asyncCB, "humidSetTask");
+            Database.set<String>(aClient, databasePath + "timestamp", retrievedTime, asyncCB, "timeSetTask");
         }
     }
+}
 
-    resetDevice();
+void initDHT()
+{
+    dht.begin();
+}
+
+void initFirebase(String apiKey, String userEmail, String userPassword)
+{
+     UserAuth user_auth(apiKey, userEmail, userPassword);
+
+    ssl_client.setClient(&wifi_client);
+    ssl_client.setInsecure();
+    ssl_client.setDebugLevel(1);
+    ssl_client.setSessionTimeout(150);
+
+    initializeApp(aClient, app, getAuth(user_auth), asyncCB, "authTask");
+    app.getApp<RealtimeDatabase>(Database);
+    Database.url(DATABASE_URL);
 }
 
 /* Function for led status indicator. */
@@ -204,20 +204,30 @@ void provisionedStatusLED(int time_interval)
 
 /* Contacts the NTP first to get the time */
 /* ===================================================== */
-int getTimeFirst(String time) {
+String getTimeFirst() {
     struct tm timeinfo;
 
     if (!getLocalTime(&timeinfo)) {
         Serial.println("Failed to obtain time");
-        return 0;
+        return "";
     }
 
     timeRetrieved = true;
-    if (time == "hour"){
-        return ((int) timeinfo.tm_hour);
-    } else if (time == "minute"){
-        return ((int) timeinfo.tm_min);
-    }
+    char timeYear[5];
+    char timeMonth[3];
+    char timeDay[3];
+    char timeHour[3];
+    char timeMinute[3];
+    char timeSecond[3];
+
+    strftime(timeYear, 5, "%Y", &timeinfo);
+    strftime(timeMonth, 3, "%m", &timeinfo);
+    strftime(timeDay, 3, "%d", &timeinfo);
+    strftime(timeHour, 3, "%H", &timeinfo);
+    strftime(timeMinute, 3, "%M", &timeinfo);
+    strftime(timeSecond, 3, "%S", &timeinfo);
+
+    return ((String)timeYear + "-" + timeMonth + "-" + timeDay + " " + timeHour+ ":" + timeMinute + ":" + timeSecond);
 }
 /* ===================================================== */
 
@@ -249,6 +259,8 @@ void provisionStart(WiFiClient client)
 {
     const char *wifiSSID;
     const char *wifiPassword;
+    const char *firebaseUser;
+    const char *firebasePassword;
 
     if (client)
     {
@@ -267,6 +279,8 @@ void provisionStart(WiFiClient client)
 
                     const char *receivedSSID = receivedMessage["SSID"];
                     const char *receivedPassword = receivedMessage["Password"];
+                    const char *receivedFirebaseUser = receivedMessage["FirebaseUser"];
+                    const char *receivedFirebasePassword = receivedMessage["FirebasePassword"];
 
                     WiFi.begin(receivedSSID, receivedPassword);
 
@@ -277,26 +291,32 @@ void provisionStart(WiFiClient client)
                     {
                         provisionedStatusLED(300);
                         timeout++;
-                        if (timeout == 10)
+                        if (timeout == 5)
                         {
                             break;
                         }
+                        delay(1000);
                     }
                     Serial.println(WiFi.localIP());
                     wifiSSID = receivedSSID;
                     wifiPassword = receivedPassword;
+                    firebaseUser = receivedFirebaseUser;
+                    firebasePassword = receivedFirebasePassword;
                 }
 
                 // Checks if WiFi connection is successful
                 if (WiFi.status() == WL_CONNECTED)
                 {
-                    client.println("Connected!");
+                    client.println(200);
                     Serial.println("Acknowledgment sent");
 
                     preferences.begin("credentials", false);
 
                     preferences.putString("storedSSID", wifiSSID);
                     preferences.putString("storedPassword", wifiPassword);
+
+                    preferences.putString("storedFBUser", firebaseUser);
+                    preferences.putString("storedFBPass", firebasePassword);
 
                     preferences.end();
 
@@ -307,11 +327,13 @@ void provisionStart(WiFiClient client)
                 }
                 else if (WiFi.status() != WL_CONNECTED)
                 {
-                    client.println("Connection failed! try again!");
+                    client.println(400);
+                    return;
                 }
             }
             client.stop();
             Serial.println("Client disconnected");
+            ESP.restart();
         }
     }
 }
@@ -336,7 +358,7 @@ void resetDevice()
 
         if (millis() - buttonPressTime >= 5000)
         {
-            Serial.println("Button pressed for 5 seconds. Resetting...");
+            // Serial.println("Button pressed for 5 seconds. Resetting...");
 
             preferences.begin("credentials", false);
             preferences.clear();
