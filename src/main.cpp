@@ -374,10 +374,12 @@ void resetDevice()
 
     delay(10); // Small delay to debounce the button
 }
-/* ===================================================== */
 
-/* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove)*/
-/* ===================================================== */
+/* ========================================================================= */
+/* Firebase Client Functions */
+/* ========================================================================= */
+/* Callback for asynchronous realtime database. These are permanent debugging logs. (Do not remove or change)*/
+/* ========================================================================= */
 void asyncCB(AsyncResult &aResult)
 {
     printResult(aResult);
@@ -422,4 +424,4 @@ void printResult(AsyncResult &aResult)
         Firebase.printf("Free Heap: %d\n", ESP.getFreeHeap());
     }
 }
-/* ===================================================== */
+/* ========================================================================= */
