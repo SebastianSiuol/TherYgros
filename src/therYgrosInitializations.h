@@ -3,6 +3,7 @@
 #include <time.h>
 #include <lwip/sockets.h>
 #include <Preferences.h>
+#include <RTClib.h>
 
 /* Downloaded Packages */
 #include <DHT.h>
@@ -10,6 +11,8 @@
 
 
 const char* therygrosVersion = "TherYgros_1.0.2";
+
+
 //          DHT variables and pins initialization 
 /* ===================================================== */
 #define DHTPIN 32
@@ -92,3 +95,11 @@ StaticJsonDocument<60> decodedMessage;
 /* ===================================================== */
 Preferences preferences;
 /* ===================================================== */
+//
+//
+//
+//
+//
+/* RTC */
+/* ===================================================== */
+RTC_DS3231 rtc;
