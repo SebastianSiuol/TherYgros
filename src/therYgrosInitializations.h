@@ -9,10 +9,10 @@
 #include <ArduinoJson.h>
 
 
-
+const char* therygrosVersion = "TherYgros_1.0.2";
 //          DHT variables and pins initialization 
 /* ===================================================== */
-#define DHTPIN 4
+#define DHTPIN 32
 DHT dht(DHTPIN, DHT22);
 float temperature;
 float humidity;
@@ -25,7 +25,7 @@ String databasePath;
 //
 //          Reset Button and Variables Initialization 
 /* ===================================================== */
-#define resetPin 5
+#define resetPin 23
 #define statusPin 2 //Onboard LED
 int buttonState = 0;
 unsigned long buttonPressTime = 0;
@@ -81,7 +81,7 @@ WiFiServer server(80); // <==== Creates a TCP Server with Port 80
 //
 /* Initializes JSON Doc */
 /* ===================================================== */
-StaticJsonDocument<60> receivedMessage;
+StaticJsonDocument<60> decodedMessage;
 /* ===================================================== */
 //
 //
