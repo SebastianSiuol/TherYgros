@@ -40,26 +40,6 @@ bool is_provisioned = false;
 //
 //
 //
-//          NTP Time Initializaton
-/* ===================================================== */
-const char *ntp1Server = "time.nist.gov";
-const long gmtOffset_sec = 25200; //GMT+8 Timezone
-const int daylightOffset_sec = 3600; //An Hour of Daylight Saving
-bool timeRetrieved = false; //Initially false
-const unsigned long time_retrieval_timeout = 15000; // 15 seconds
-/* ===================================================== */
-char timeYear[5];
-char timeMonth[3];
-char timeDay[3];
-char timeHour[3];
-char timeMinute[3];
-char timeSecond[3];
-/* ===================================================== */
-//
-//
-//
-//
-//
 /* TCP KeepAlive */
 /* ===================================================== */
 bool tcp_keep_alive_set = false;
@@ -100,6 +80,7 @@ Preferences preferences;
 //
 //
 //
-/* RTC */
+/* RTC and Time*/
 /* ===================================================== */
 RTC_DS3231 rtc;
+String retrievedTime;
